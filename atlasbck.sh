@@ -18,7 +18,7 @@ DEFAULT_INSTALL_DIR_JIRA="${DEFAULT_INSTALL_ROOT}/jira"
 DEFAULT_INSTALL_DIR_CONFLUENCE="${DEFAULT_INSTALL_ROOT}/confluence"
 DEFAULT_INSTALL_DIR_BITBUCKET="${DEFAULT_INSTALL_ROOT}/bitbucket"
 
-DEFAULT_HOME_ROOT="/tmp/var/atlassian/application-data"
+DEFAULT_HOME_ROOT="/var/atlassian/application-data"
 DEFAULT_HOME_DIR_JIRA="${DEFAULT_HOME_ROOT}/jira"
 DEFAULT_HOME_DIR_CONFLUENCE="${DEFAULT_HOME_ROOT}/confluence"
 DEFAULT_HOME_DIR_BITBUCKET="${DEFAULT_HOME_ROOT}/bitbucket"
@@ -28,6 +28,8 @@ DEFAULT_HOME_DIR_BITBUCKET="${DEFAULT_HOME_ROOT}/bitbucket"
 #
 ERR_BACKUP_DIR="1"
 ERR_CFG_MISSING="2"
+ERR_INSTALL_DIR="3"
+ERR_HOME_DIR="4"
 ERR_VAR_MISSING="5"
 ERR_RUN_AS_ROOT="10"
 ERR_RUN_AS_WRONG_USER="11"
@@ -65,7 +67,7 @@ function check_prereqs_global() {
   local RC="0"
 
   # Check if all necessary tools are available
-  TOOLS="date find id ln mkdir tar rm"
+  TOOLS="date find id ln mkdir pg_dump tar rm"
   for TOOL in $TOOLS; do
     BIN="$(command -v ${TOOL})"
     if [[ -z "${BIN}" ]]; then
@@ -171,11 +173,17 @@ function backup_install_dir() {
   eval BACKUP_DIR='$'BACKUP_DIR_${APPL}
   local T="$(eval ${TIMESTAMP})"
   local BACKUP_FILE="${BACKUP_DIR}/${APPL,,}-install-${T}.tar.gz"
+  local BACKUP_LINK="${BACKUP_DIR}/$(basename ${INSTALL_DIR})-install-${T}"
 
-  cd $(dirname "${INSTALL_DIR}") && ln -s $(basename ${INSTALL_DIR}) $(basename ${INSTALL_DIR})-bck-${T} && tar -chzf ${BACKUP_FILE} $(basename ${INSTALL_DIR})
-  RC=$(($RC+$_RC))
-  rm -f ${INSTALL_DIR}-bck-${T}
-  RC=$(($RC+$_RC))
+  if [[ -d "${INSTALL_DIR}" && -x "${INSTALL_DIR}" ]]; then
+    cd $(dirname "${BACKUP_LINK}") && ln -s ${INSTALL_DIR} ${BACKUP_LINK} && tar -chzf ${BACKUP_FILE} ${BACKUP_LINK}
+    RC=$(($RC+$_RC))
+    rm -f ${BACKUP_LINK}
+    RC=$(($RC+$_RC))
+  else
+    log "ERROR" "Install directory ${INSTALL_DIR} is not a directory."
+    RC="${ERR_INSTALL_DIR}"
+  fi
 
   return ${RC}
 }
@@ -202,10 +210,17 @@ function backup_home_dir() {
   eval BACKUP_DIR='$'BACKUP_DIR_${APPL}
   local T="$(eval ${TIMESTAMP})"
   local BACKUP_FILE="${BACKUP_DIR}/${APPL,,}-home-${T}.tar.gz"
+  local BACKUP_LINK="${BACKUP_DIR}/$(basename ${HOME_DIR})-home-${T}"
 
-  cd $(dirname "${HOME_DIR}") && ln -s $(basename ${HOME_DIR}) $(basename ${HOME_DIR})-bck-${T} && tar -chzf ${BACKUP_FILE} $(basename ${HOME_DIR})
-  RC=$(($RC+$_RC))
-  rm -f ${HOME_DIR}-bck-${T}
+  if [[ -d "${HOME_DIR}" && -x "${HOME_DIR}" ]]; then
+    cd $(dirname "${BACKUP_LINK}") && ln -s ${HOME_DIR} ${BACKUP_LINK} && tar -chzf ${BACKUP_FILE} ${BACKUP_LINK}
+    RC=$(($RC+$_RC))
+    rm -f ${BACKUP_LINK}
+    RC=$(($RC+$_RC))
+  else
+    log "ERROR" "Home directory ${HOME_DIR} is not a directory."
+    RC="${ERR_HOME_DIR}"
+  fi
   RC=$(($RC+$_RC))
 
   return ${RC}
