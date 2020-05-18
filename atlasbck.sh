@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-#SUPPORTED_APPS="Jira Confluence Bitbucket"
+#SUPPORTED_APPLS="Jira Confluence Bitbucket"
 SUPPORTED_APPLS="Jira"
 
 #
@@ -11,7 +11,7 @@ DENY_ROOT_EXECUTION="true"
 STRICT_USER_EXECUTION="true"
 TIMESTAMPFMT="%Y%m%d-%H%M"
 TIMESTAMP="date +${TIMESTAMPFMT}"
-CONFIG_FILE="./atlasbck.cfg"
+CONFIG_FILE="$(dirname $0)/atlasbck.cfg"
 
 DEFAULT_INSTALL_ROOT="/opt/atlassian"
 DEFAULT_INSTALL_DIR_JIRA="${DEFAULT_INSTALL_ROOT}/jira"
@@ -114,6 +114,7 @@ function check_prereqs_appl() {
     if ! mkdir -p "${BACKUP_DIR}"; then
       log "FATAL" "Create backup directory ${BACKUP_DIR} failed"
       RC="${ERR_BACKUP_DIR}"
+      return ${RC}
     else
       RC="0"
     fi
@@ -138,8 +139,9 @@ function remove_obsolete_backps() {
   local BACKUP_DIR=""
   local RC="0"
 
-  log "INFO" "Remove obsolete backups."
   eval BACKUP_DIR='$'BACKUP_DIR_${APPL}
+  log "INFO" "Remove obsolete backups from ${BACKUP_DIR} ..."
+  sleep 5
   if [[ -d "${BACKUP_DIR}" && -w "${BACKUP_DIR}" && -x "${BACKUP_DIR}" ]]; then
     find "${BACKUP_DIR}" -user "${USER}" -type f -mtime +${BACKUP_RETENTION} -exec rm -f {} \; > /dev/null 2>&1
     RC=$?
@@ -176,7 +178,8 @@ function backup_install_dir() {
   local BACKUP_LINK="${BACKUP_DIR}/$(basename ${INSTALL_DIR})-install-${T}"
 
   if [[ -d "${INSTALL_DIR}" && -x "${INSTALL_DIR}" ]]; then
-    cd $(dirname "${BACKUP_LINK}") && ln -s ${INSTALL_DIR} ${BACKUP_LINK} && tar -chzf ${BACKUP_FILE} ${BACKUP_LINK}
+    log "INFO" "Backup install directory ${INSTALL_DIR} to ${BACKUP_FILE}."
+    cd $(dirname "${BACKUP_LINK}") && ln -s ${INSTALL_DIR} ${BACKUP_LINK} && tar --exclude=uninstall -chzf ${BACKUP_FILE} $(basename ${BACKUP_LINK})
     RC=$(($RC+$_RC))
     rm -f ${BACKUP_LINK}
     RC=$(($RC+$_RC))
@@ -213,7 +216,8 @@ function backup_home_dir() {
   local BACKUP_LINK="${BACKUP_DIR}/$(basename ${HOME_DIR})-home-${T}"
 
   if [[ -d "${HOME_DIR}" && -x "${HOME_DIR}" ]]; then
-    cd $(dirname "${BACKUP_LINK}") && ln -s ${HOME_DIR} ${BACKUP_LINK} && tar -chzf ${BACKUP_FILE} ${BACKUP_LINK}
+    log "INFO" "Backup home directory ${HOME_DIR} to ${BACKUP_FILE}."
+    cd $(dirname "${BACKUP_LINK}") && ln -s ${HOME_DIR} ${BACKUP_LINK} && tar -chzf ${BACKUP_FILE} $(basename ${BACKUP_LINK})
     RC=$(($RC+$_RC))
     rm -f ${BACKUP_LINK}
     RC=$(($RC+$_RC))
@@ -255,9 +259,14 @@ function dump_database() {
   eval BACKUP_DIR='$'BACKUP_DIR_${APPL}
   local T="$(eval ${TIMESTAMP})"
   local BACKUP_DUMP="${BACKUP_DIR}/${APPL,,}-db-${T}"
+  local BACKUP_FILE="${BACKUP_DUMP}.tar.gz"
 
   log "INFO" "Dumping database ${DB_NAME} to ${BACKUP_DUMP}"
-  pg_dump -Fd "${DB_NAME}" -j 5 -U "${DB_USER}" -h "${DB_HOST}" -f ${BACKUP_DUMP}
+  pg_dump -Fd "${DB_NAME}" -j 5 -U "${DB_USER}" -f ${BACKUP_DUMP}
+
+  log "INFO" "Tarring database dump to ${BACKUP_FILE}"
+  cd $(dirname "${BACKUP_DUMP}") && tar -chzf ${BACKUP_FILE} $(basename ${BACKUP_DUMP}) && rm -rf ${BACKUP_DUMP}
+
   RC=$(($RC+$_RC))
 
   return $RC
