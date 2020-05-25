@@ -23,6 +23,10 @@ DEFAULT_HOME_DIR_JIRA="${DEFAULT_HOME_ROOT}/jira"
 DEFAULT_HOME_DIR_CONFLUENCE="${DEFAULT_HOME_ROOT}/confluence"
 DEFAULT_HOME_DIR_BITBUCKET="${DEFAULT_HOME_ROOT}/bitbucket"
 
+DEFAULT_SYSTEM_ACCOUNT_JIRA="jira"
+DEFAULT_SYSTEM_ACCOUNT_CONFLUENCE="confluence"
+DEFAULT_SYSTEM_ACCOUNT_BITBUCKET="atlbitbucket"
+
 #
 # List of error codes
 #
@@ -122,9 +126,23 @@ function check_prereqs_appl() {
 
   # Check if backup is executed with application's system account
   log "INFO" "Check user executing atlasbck for application ${APP}."
-  if [[ "${STRICT_USER_EXECUTION}" = "true" && "$(id -u -n)" != "${APP,,}" ]]; then
-    log "FATAL" "Running atlasbck as $(id -u -n) for application ${APP}, has to be done as ${APP,,}."
-    exit ${ERR_RUN_AS_WRONG_USER}
+  if [[ "${STRICT_USER_EXECUTION}" = "true" ]]; then
+    eval SYSTEM_ACCOUNT='$'SYSTEM_ACCOUNT_${APPL}
+    eval TMP='$'DEFAULT_SYSTEM_ACCOUNT_${APPL}
+
+    if [[ -z "${SYSTEM_ACCOUNT}" && ! -z "${TMP}" ]]; then
+      SYSTEM_ACCOUNT="${TMP}"
+      log "INFO" "Application's system account not set, use default ${SYSTEM_ACCOUNT}"
+    elif [[ -z "${SYSTEM_ACCOUNT}" && -z "${TMP}" ]]; then
+      log "ERROR" "Application's system account not set and default not available."
+      RC="${ERR_VAR_MISSING}"
+      exit $RC
+    fi
+
+    if [[ "$(id -u -n)" != "${SYSTEM_ACCOUNT}" ]]; then
+      log "FATAL" "Running atlasbck as $(id -u -n) for application ${APP}, has to be done as ${SYSTEM_ACCOUNT}."
+      exit ${ERR_RUN_AS_WRONG_USER}
+    fi
   elif [[ "${STRICT_USER_EXECUTION}" == "false" ]]; then
     log "WARN" "Strict user execution disabled."
   fi
