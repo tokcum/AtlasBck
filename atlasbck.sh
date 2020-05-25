@@ -127,8 +127,8 @@ function check_prereqs_appl() {
   # Check if backup is executed with application's system account
   log "INFO" "Check user executing atlasbck for application ${APP}."
   if [[ "${STRICT_USER_EXECUTION}" = "true" ]]; then
-    eval SYSTEM_ACCOUNT='$'SYSTEM_ACCOUNT_${APPL}
-    eval TMP='$'DEFAULT_SYSTEM_ACCOUNT_${APPL}
+    eval SYSTEM_ACCOUNT='$'SYSTEM_ACCOUNT_${APP}
+    eval TMP='$'DEFAULT_SYSTEM_ACCOUNT_${APP}
 
     if [[ -z "${SYSTEM_ACCOUNT}" && ! -z "${TMP}" ]]; then
       SYSTEM_ACCOUNT="${TMP}"
